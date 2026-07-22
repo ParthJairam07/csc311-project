@@ -5,6 +5,7 @@ import torch.nn.functional as F
 import torch.optim as optim
 import torch.utils.data
 import torch
+import matplotlib.pyplot as plt
 
 from utils import (
     load_valid_csv,
@@ -68,15 +69,10 @@ class AutoEncoder(nn.Module):
         :param inputs: user vector.
         :return: user vector.
         """
-        #####################################################################
-        # TODO:                                                             #
-        # Implement the function as described in the docstring.             #
-        # Use sigmoid activations for f and g.                              #
-        #####################################################################
-        out = inputs
-        #####################################################################
-        #                       END OF YOUR CODE                            #
-        #####################################################################
+
+        out = torch.sigmoid(self.g(inputs))   # encode
+        out = torch.sigmoid(self.h(out))      # decode
+
         return out
 
 
@@ -94,6 +90,7 @@ def train(model, lr, lamb, train_data, zero_train_data, valid_data, num_epoch):
     :return: None
     """
     # TODO: Add a regularizer to the cost function.
+    
 
     # Tell PyTorch you are training the model.
     model.train()
@@ -101,6 +98,9 @@ def train(model, lr, lamb, train_data, zero_train_data, valid_data, num_epoch):
     # Define optimizers and loss function.
     optimizer = optim.SGD(model.parameters(), lr=lr)
     num_student = train_data.shape[0]
+
+    train_costs = []
+    valid_accs = []
 
     for epoch in range(0, num_epoch):
         train_loss = 0.0
@@ -116,21 +116,21 @@ def train(model, lr, lamb, train_data, zero_train_data, valid_data, num_epoch):
             nan_mask = np.isnan(train_data[user_id].unsqueeze(0).numpy())
             target[nan_mask] = output[nan_mask]
 
-            loss = torch.sum((output - target) ** 2.0)
+            loss = torch.sum((output - target) ** 2.0) + 0.5 * lamb * model.get_weight_norm()
             loss.backward()
 
             train_loss += loss.item()
             optimizer.step()
 
         valid_acc = evaluate(model, zero_train_data, valid_data)
+        train_costs.append(train_loss)
+        valid_accs.append(valid_acc)
         print(
             "Epoch: {} \tTraining Cost: {:.6f}\t " "Valid Acc: {}".format(
                 epoch, train_loss, valid_acc
             )
         )
-    #####################################################################
-    #                       END OF YOUR CODE                            #
-    #####################################################################
+    return train_costs, valid_accs
 
 
 def evaluate(model, train_data, valid_data):
@@ -162,26 +162,77 @@ def evaluate(model, train_data, valid_data):
 def main():
     zero_train_matrix, train_matrix, valid_data, test_data = load_data()
 
-    #####################################################################
-    # TODO:                                                             #
-    # Try out 5 different k and select the best k using the             #
-    # validation set.                                                   #
-    #####################################################################
+    num_question = train_matrix.shape[1]
+    k_values = [10, 50, 100, 200, 500]
+
     # Set model hyperparameters.
-    k = None
     model = None
 
     # Set optimization hyperparameters.
-    lr = None
-    num_epoch = None
-    lamb = None
+    lr = 0.01
+    num_epoch = 50
+    lamb = 0.0
 
-    train(model, lr, lamb, train_matrix, zero_train_matrix, valid_data, num_epoch)
-    # Next, evaluate your network on validation/test data
+    k_star, best_acc = None, -1
+    best_model, best_hist = None, None
+    for k in k_values:
+        model = AutoEncoder(num_question, k)
+        train_costs, valid_accs = train(
+            model, lr, lamb, train_matrix, zero_train_matrix, valid_data, num_epoch
+        )
+        acc = evaluate(model, zero_train_matrix, valid_data)
+        print(f"k={k}, valid acc={acc}")
+        if acc > best_acc:
+            k_star, best_acc = k, acc
+            best_model = model
+            best_hist = (train_costs, valid_accs)
 
-    #####################################################################
-    #                       END OF YOUR CODE                            #
-    #####################################################################
+    print(f"\nSelected k* = {k_star} (validation accuracy = {best_acc:.4f})")
+
+    # part (d)
+    train_costs, valid_accs = best_hist
+    epochs = range(1, num_epoch + 1)
+
+    plt.switch_backend("Agg")
+    fig, ax1 = plt.subplots(figsize=(8, 5))
+    ax1.plot(epochs, train_costs, "b-o", markersize=3, label="Training cost")
+    ax1.set_xlabel("Epoch")
+    ax1.set_ylabel("Training cost (sum of squared error)", color="b")
+    ax1.tick_params(axis="y", labelcolor="b")
+
+    ax2 = ax1.twinx()
+    ax2.plot(epochs, valid_accs, "r-s", markersize=3, label="Validation accuracy")
+    ax2.set_ylabel("Validation accuracy", color="r")
+    ax2.tick_params(axis="y", labelcolor="r")
+
+    plt.title(f"Training cost & validation accuracy vs epoch (k*={k_star}, lr={lr})")
+    fig.tight_layout()
+    plt.savefig("nn_k_star_curves.png", dpi=150)
+    print("Saved plot to nn_k_star_curves.png")
+
+  
+    test_acc = evaluate(best_model, zero_train_matrix, test_data)
+    print(f"Final Test Accuracy (k*={k_star}): {test_acc:.4f}")
+
+
+    # part(e)
+    lambda_values = [0.001, 0.01, 0.1, 1.0]
+
+    best_lamb, best_reg_acc = None, -1
+    best_reg_model = None
+    for lamb in lambda_values:
+        model = AutoEncoder(num_question, k_star)
+        train(model, lr, lamb, train_matrix, zero_train_matrix, valid_data, num_epoch)
+        acc = evaluate(model, zero_train_matrix, valid_data)
+        print(f"lambda={lamb}, valid acc={acc:.4f}")
+        if acc > best_reg_acc:
+            best_lamb, best_reg_acc = lamb, acc
+            best_reg_model = model
+
+    reg_test_acc = evaluate(best_reg_model, zero_train_matrix, test_data)
+    print(f"\nOptimal lambda value* = {best_lamb}")
+    print(f"Regularized Validation Accuracy: {best_reg_acc:.4f}")
+    print(f"Regularized Test Accuracy: {reg_test_acc:.4f}")
 
 
 if __name__ == "__main__":

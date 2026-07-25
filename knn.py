@@ -44,11 +44,18 @@ def knn_impute_by_item(matrix, valid_data, k):
     # TODO:                                                             #
     # Implement the function as described in the docstring.             #
     #####################################################################
-    acc = None
+    nbrs = KNNImputer(n_neighbors=k)
+    # Transpose the matrix so that each row is a question. This way,
+    # KNNImputer finds similar questions instead of similar students.
+    mat = nbrs.fit_transform(matrix.T)
+    # Transpose back so the matrix is (num_students, num_questions) again.
+    mat = mat.T
+    acc = sparse_matrix_evaluate(valid_data, mat)
+    print("Validation Accuracy: {}".format(acc))
+    return acc
     #####################################################################
     #                       END OF YOUR CODE                            #
     #####################################################################
-    return acc
 
 
 def main():
@@ -67,7 +74,43 @@ def main():
     # the best performance and report the test accuracy with the        #
     # chosen k*.                                                        #
     #####################################################################
-    pass
+    k_values = [1, 6, 11, 16, 21, 26]
+
+    # ---------- User-based KNN ----------
+    user_accs = []
+    for k in k_values:
+        print("User-based KNN with k = {}".format(k))
+        acc = knn_impute_by_user(sparse_matrix, val_data, k)
+        user_accs.append(acc)
+
+    # ---------- Item-based KNN ----------
+    item_accs = []
+    for k in k_values:
+        print("Item-based KNN with k = {}".format(k))
+        acc = knn_impute_by_item(sparse_matrix, val_data, k)
+        item_accs.append(acc)
+
+    # ---------- Plot validation accuracy vs k ----------
+    plt.plot(k_values, user_accs, marker="o", label="User-based")
+    plt.plot(k_values, item_accs, marker="o", label="Item-based")
+    plt.xlabel("k")
+    plt.ylabel("Validation Accuracy")
+    plt.title("KNN Validation Accuracy vs k")
+    plt.legend()
+    plt.savefig("knn_accuracy.png")
+    plt.show()
+
+    # ---------- Pick the best k and report test accuracy ----------
+    best_k_user = k_values[user_accs.index(max(user_accs))]
+    best_k_item = k_values[item_accs.index(max(item_accs))]
+
+    print("Best k for user-based KNN: {}".format(best_k_user))
+    test_acc_user = knn_impute_by_user(sparse_matrix, test_data, best_k_user)
+    print("Test Accuracy (user-based, k = {}): {}".format(best_k_user, test_acc_user))
+
+    print("Best k for item-based KNN: {}".format(best_k_item))
+    test_acc_item = knn_impute_by_item(sparse_matrix, test_data, best_k_item)
+    print("Test Accuracy (item-based, k = {}): {}".format(best_k_item, test_acc_item))
     #####################################################################
     #                       END OF YOUR CODE                            #
     #####################################################################

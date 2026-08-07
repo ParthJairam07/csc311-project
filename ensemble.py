@@ -38,8 +38,7 @@ def predict_probs(data, theta, beta):
     for i in range(len(data["question_id"])):
         u = data["user_id"][i]
         q = data["question_id"][i]
-        # Guard the sizing issue you flagged: if this model never saw the
-        # user/question, its theta/beta doesn't cover that ID -> use 0.5.
+
         if u < len(theta) and q < len(beta):
             probs.append(sigmoid(theta[u] - beta[q]))
         else:
@@ -67,9 +66,6 @@ def main():
 
     models = train_models(train_data, val_data, lr, iterations, num_models=3)
 
-    # Average probabilities first, THEN threshold (utils.evaluate does the
-    # >= 0.5 thresholding internally). This is the "average probabilities,
-    # not votes" requirement.
     val_probs = ensemble_predict(val_data, models)
     test_probs = ensemble_predict(test_data, models)
 

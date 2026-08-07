@@ -75,22 +75,18 @@ def main():
     # chosen k*.                                                        #
     #####################################################################
     k_values = [1, 6, 11, 16, 21, 26]
-
-    # ---------- User-based KNN ----------
     user_accs = []
     for k in k_values:
         print("User-based KNN with k = {}".format(k))
         acc = knn_impute_by_user(sparse_matrix, val_data, k)
         user_accs.append(acc)
 
-    # ---------- Item-based KNN ----------
     item_accs = []
     for k in k_values:
         print("Item-based KNN with k = {}".format(k))
         acc = knn_impute_by_item(sparse_matrix, val_data, k)
         item_accs.append(acc)
 
-    # ---------- Plot validation accuracy vs k ----------
     plt.plot(k_values, user_accs, marker="o", label="User-based")
     plt.plot(k_values, item_accs, marker="o", label="Item-based")
     plt.xlabel("k")
@@ -100,7 +96,6 @@ def main():
     plt.savefig("knn_accuracy.png")
     plt.show()
 
-    # ---------- Pick the best k and report test accuracy ----------
     best_k_user = k_values[user_accs.index(max(user_accs))]
     best_k_item = k_values[item_accs.index(max(item_accs))]
 
